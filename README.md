@@ -3,7 +3,7 @@
 	<h4 align="center">
 		Have your decompilers ready when you need them most.
 	</h4>
-	<p>Java Decompiler combines the strength of four popular Java decompilers.</p>
+	<p>Java Decompiler combines the strength of popular Java decompilers, tailored for simplicity and efficiency.</p>
 </div>
 
 <p align="center">
@@ -12,40 +12,68 @@
 
 ## 📄&nbsp;Usage
 
-First, create a directory `./infiles` that contains all your JAR and APK files you want to decompile.
+1. **Prepare Directories**:
+   - Create a directory `./infiles` for the files you want to decompile.
+   - Place any external libraries (in JAR format) into `./libfiles`.
+   - Set up an empty directory `./outfiles` for the output.
 
-Then, in case the targeted files depend on any external library, put a copy of these libraries in JAR format into a directory `./libfiles`.
-Some decompilers depend on this to work properly.
+2. **Run the Docker Image**:
 
-Next, prepare an empty directory `./outfiles`, which is where the output of the decompilers will be written to.
+   **For Linux and macOS:**
 
-Lastly, run the Docker image via the following command.
+   ```bash
+   docker run \
+       -ti \
+       --rm \
+       -v "$PWD/infiles:/infiles:Z,ro" \
+       -v "$PWD/libfiles:/libfiles:Z,ro" \
+       -v "$PWD/outfiles:/outfiles:Z,rw" \
+       ghcr.io/rims-naps/java-decompiler:latest
+   ```
 
-```bash
-docker run \
-	-ti \
-	--rm \
-	-v "$PWD/infiles:/infiles:Z,ro" \
-	-v "$PWD/libfiles:/libfiles:Z,ro" \
-	-v "$PWD/outfiles:/outfiles:Z,rw" \
-	ghcr.io/rims-naps/java-decompiler:latest
-```
+   **For Windows CMD:**
 
+   ```cmd
+   docker run ^
+       -ti ^
+       --rm ^
+       -v "%cd%\infiles:/infiles:Z,ro" ^
+       -v "%cd%\libfiles:/libfiles:Z,ro" ^
+       -v "%cd%\outfiles:/outfiles:Z,rw" ^
+       ghcr.io/rims-naps/java-decompiler:latest
+   ```
 
-```
-docker run -ti --rm -v "${PWD}/infiles:/infiles:Z,ro" -v "${PWD}/libfiles:/libfiles:Z,ro" -v "${PWD}/outfiles:/outfiles:Z,rw" ghcr.io/eikendev/java-decompiler:latest
-```
+   **For Windows PowerShell:**
 
-If you want to use [Podman](https://podman.io/), simply switch `docker` to `podman` at the start of the command.
+   ```powershell
+docker run `
+    -ti `
+    --rm `
+    -v "${PWD}\infiles:/infiles:Z,ro" `
+    -v "${PWD}\libfiles:/libfiles:Z,ro" `
+    -v "${PWD}\outfiles:/outfiles:Z,rw" `
+    ghcr.io/rims-naps/java-decompiler:latest
+   ```
+
+   For Podman users, replace `docker` with `podman` in the command.
 
 ## 💡&nbsp;Background
 
-This Docker image is equipped with four Java decompilers:
+This Docker image is equipped with the following Java decompilers:
 - [CFR](https://www.benf.org/other/cfr/)
-- [Fernflower](https://github.com/JetBrains/intellij-community/tree/master/plugins/java-decompiler/engine)
-- [Krakatau](https://github.com/Storyyeller/Krakatau)
+- [Vineflower](https://github.com/Vineflower/vineflower)
 - [Procyon](https://github.com/mstrobel/procyon)
 
-It also includes [Enjarify](https://github.com/Storyyeller/enjarify) and [jadx](https://github.com/skylot/jadx) for the decompilation of APK files.
+**Note:** This version no longer supports APK decompilation. The focus is now solely on JAR files. The following tools have been removed:
+- Fernflower
+- Krakatau
+- jadx
+- Enjarify
 
-For more information on all these tools, check out [my related blog post](https://eiken.dev/blog/2021/02/how-to-break-your-jar-in-2021-decompilation-guide-for-jars-and-apks/).
+The replaced tool is [Vineflower](https://github.com/Vineflower/vineflower) instead of Fernflower.
+
+## ⚠️&nbsp;Acknowledgements
+
+This project builds upon the work of the original developer, [eikendev](https://github.com/eikendev/java-decompiler), who did the majority of the development. My contribution involved simplifying and optimizing the code to run more efficiently on lower-end hardware, focusing exclusively on JAR files.
+
+For more details on the original tools and decompilation processes, refer to the [original repository](https://github.com/eikendev/java-decompiler).
