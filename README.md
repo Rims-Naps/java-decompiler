@@ -7,7 +7,7 @@
 </div>
 
 <p align="center">
-	<a href="https://github.com/Rims-Naps/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/eikendev/java-decompiler"/></a>&nbsp;
+	<a href="https://github.com/Rims-Naps/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/Rims-Naps/java-decompiler"/></a>&nbsp;
 </p>
 
 ## 📄&nbsp;Usage
