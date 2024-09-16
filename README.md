@@ -7,7 +7,7 @@
 </div>
 
 <p align="center">
-	<a href="https://github.com/eikendev/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/eikendev/java-decompiler"/></a>&nbsp;
+	<a href="https://github.com/Rims-Naps/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/eikendev/java-decompiler"/></a>&nbsp;
 </p>
 
 ## 📄&nbsp;Usage
@@ -28,7 +28,12 @@ docker run \
 	-v "$PWD/infiles:/infiles:Z,ro" \
 	-v "$PWD/libfiles:/libfiles:Z,ro" \
 	-v "$PWD/outfiles:/outfiles:Z,rw" \
-	ghcr.io/eikendev/java-decompiler:latest
+	ghcr.io/rims-naps/java-decompiler:latest
+```
+
+
+```
+docker run -ti --rm -v "${PWD}/infiles:/infiles:Z,ro" -v "${PWD}/libfiles:/libfiles:Z,ro" -v "${PWD}/outfiles:/outfiles:Z,rw" ghcr.io/eikendev/java-decompiler:latest
 ```
 
 If you want to use [Podman](https://podman.io/), simply switch `docker` to `podman` at the start of the command.

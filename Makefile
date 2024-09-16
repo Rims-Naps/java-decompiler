@@ -18,11 +18,11 @@ run_debug:
 
 .PHONY: run
 run:
-	podman pull ghcr.io/eikendev/java-decompiler:latest
+	podman pull ghcr.io/rims-naps/java-decompiler:latest
 	podman run \
 		-ti \
 		--rm \
 		-v ${PWD}/infiles:/infiles:Z,ro \
 		-v ${PWD}/libfiles:/libfiles:Z,ro \
 		-v ${PWD}/outfiles:/outfiles:Z,rw \
-		ghcr.io/eikendev/java-decompiler:latest
+		ghcr.io/rims-naps/java-decompiler:latest

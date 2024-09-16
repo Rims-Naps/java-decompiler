@@ -1,114 +1,74 @@
 #!/usr/bin/env bash
 
-set -e
+set -eo pipefail
 
 count=0
+error_log="$OUTFILES/decompilation-errors.txt"
+
+# Function to log errors
+log_error() {
+    local message="$1"
+    echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') - $message" | tee -a "$error_log" >&2
+}
+
+# Function to log info messages
+log_info() {
+    local message="$1"
+    echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') - $message" | tee -a "$error_log"
+}
 
 function decompile_jars {
-	local infiles
-	local decompiler
-	local outdir
+    local infiles
+    local decompiler
+    local outdir
 
-	infiles="$1"
+    infiles="$1"
 
-	if [ "$(ls -A $infiles/*.jar)" ]; then
-		for jarfile in $infiles/*.jar; do
-			jarcount=0
+    if [ "$(ls -A $infiles/*.jar 2>/dev/null)" ]; then
+        for jarfile in $infiles/*.jar; do
+            jarcount=0
 
-			decompiler='cfr'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir"
-			fi
+            for decompiler in 'cfr' 'vineflower' 'procyon'; do
+                outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
+                if [[ -e "$outdir" ]]; then
+                    log_info "Directory '$outdir' already exists. Skipping..."
+                else
+                    ((jarcount+=1))
+                    mkdir -p "$outdir"
+                    log_info "Decompiling $(basename $jarfile) with $decompiler"
+                    case $decompiler in
+                        'cfr')
+                            java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with CFR"
+                            ;;
+                        'vineflower')
+                            java "-Xmx$JAVA_XMX" -jar /opt/vineflower.jar "$jarfile" "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Vineflower"
+                            ;;
+                        'procyon')
+                            procyon -jar "$jarfile" -o "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Procyon"
+                            ;;
+                    esac
+                fi
+            done
 
-			decompiler='fernflower'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				java "-Xmx$JAVA_XMX" -jar /opt/fernflower.jar "$jarfile" "$outdir"
-				(cd "$outdir" && unzip *.jar && rm *.jar)
-			fi
-
-			decompiler='krakatau'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				libs="$(find "$LIBFILES" -type f -iname '*.jar' -print0 | tr '\0' ';')"
-				rt='/opt/rt.jar'
-				paths="$libs$rt"
-				/opt/krakatau/decompile.py -out "$outdir" -skip -nauto -path "$paths" "$jarfile"
-			fi
-
-			decompiler='procyon'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				procyon -jar "$jarfile" -o "$outdir"
-			fi
-
-			if [[ "$jarcount" -gt 0 ]]; then
-				((count+=1))
-			fi
-		done
-	fi
+            if [[ "$jarcount" -gt 0 ]]; then
+                ((count+=1))
+            fi
+        done
+    else
+        log_info "No JAR files found in $infiles"
+    fi
 }
 
-function decompile_apks {
-	local infiles
-	local decompiler
-	local outdir
-
-	infiles="$1"
-
-	if [ "$(ls -A $INFILES/*.apk)" ]; then
-		for apkfile in $INFILES/*.apk; do
-			apkcount=0
-
-			decompiler='jadx'
-			outdir="$OUTFILES/$(basename $apkfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((apkcount+=1))
-				mkdir -p "$outdir"
-				/opt/jadx/bin/jadx --deobf -d "$outdir" --log-level INFO "$apkfile"
-			fi
-
-			if [[ "$apkcount" -gt 0 ]]; then
-				((count+=1))
-			fi
-		done
-	fi
-}
-
-mkdir -p ~/enjarify
-
-if [ "$(ls -A $INFILES/*.apk)" ]; then
-	for apkfile in $INFILES/*.apk; do
-		/opt/enjarify/enjarify.sh -o "$HOME/enjarify/$(basename $apkfile).jar" "$apkfile"
-	done
-fi
-
+log_info "Starting decompilation process"
 decompile_jars "$INFILES"
-decompile_jars "$HOME/enjarify"
-decompile_apks "$INFILES"
 
 if [[ "$count" -eq 0 ]]; then
-	printf "No files were processed.\n" >&2
-	exit 1
+    log_error "No files were processed."
+    exit 1
 else
-	find "$OUTFILES" -type f -iname '*.java' -print0 | xargs -0 --max-procs=8 astyle --suffix=none --style=java --indent=tab
+    log_info "Processed $count JAR files"
+    log_info "Formatting decompiled Java files"
+    find "$OUTFILES" -type f -iname '*.java' -print0 | xargs -0 --max-procs=8 astyle --suffix=none --style=java --indent=tab 2>> "$error_log" || log_error "Failed to format some Java files"
 fi
+
+log_info "Decompilation process completed. Check $error_log for any errors."
