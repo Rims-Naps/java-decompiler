@@ -1,16 +1,17 @@
 <div align="center">
-	<h1>Java Decompiler</h1>
-	<h4 align="center">
-		Have your decompilers ready when you need them most.
-	</h4>
-	<p>Java Decompiler combines the strength of popular Java decompilers, tailored for simplicity and efficiency.</p>
+
+  <h1>Java Decompiler</h1>
+  <h4 align="center">
+    Have your decompilers ready when you need them most.
+  </h4>
+  <p>Java Decompiler combines the strength of popular Java decompilers, tailored for simplicity and efficiency.</p>
 </div>
 
 <p align="center">
-	<a href="https://github.com/Rims-Naps/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/Rims-Naps/java-decompiler"/></a>&nbsp;
+  <a href="https://github.com/Rims-Naps/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/Rims-Naps/java-decompiler"/></a>
 </p>
 
-## 📄&nbsp;Usage
+## 📄 Usage
 
 1. **Prepare Directories**:
    - Create a directory `./infiles` for the files you want to decompile.
@@ -46,18 +47,18 @@
    **For Windows PowerShell:**
 
    ```powershell
-docker run `
-    -ti `
-    --rm `
-    -v "${PWD}\infiles:/infiles:Z,ro" `
-    -v "${PWD}\libfiles:/libfiles:Z,ro" `
-    -v "${PWD}\outfiles:/outfiles:Z,rw" `
-    ghcr.io/rims-naps/java-decompiler:latest
+   docker run `
+       -ti `
+       --rm `
+       -v "${PWD}\infiles:/infiles:Z,ro" `
+       -v "${PWD}\libfiles:/libfiles:Z,ro" `
+       -v "${PWD}\outfiles:/outfiles:Z,rw" `
+       ghcr.io/rims-naps/java-decompiler:latest
    ```
 
    For Podman users, replace `docker` with `podman` in the command.
 
-## 💡&nbsp;Background
+## 💡 Background
 
 This Docker image is equipped with the following Java decompilers:
 - [CFR](https://www.benf.org/other/cfr/)
@@ -72,7 +73,7 @@ This Docker image is equipped with the following Java decompilers:
 
 The replaced tool is [Vineflower](https://github.com/Vineflower/vineflower) instead of Fernflower.
 
-## ⚠️&nbsp;Acknowledgements
+## ⚠️ Acknowledgements
 
 This project builds upon the work of the original developer, [eikendev](https://github.com/eikendev/java-decompiler), who did the majority of the development. My contribution involved simplifying and optimizing the code to run more efficiently on lower-end hardware, focusing exclusively on JAR files.
 
