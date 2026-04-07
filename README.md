@@ -23,6 +23,26 @@
 ```
 docker run -v "$PWD/infiles:/infiles" -v "$PWD/libfiles:/libfiles" -v "$PWD/outfiles:/outfiles" ghcr.io/rims-naps/java-decompiler:latest
 ```
+
+  Parallel decompilation is enabled by default. You can tune it with environment variables:
+
+  - `MAX_DECOMPILER_JOBS`: maximum concurrent decompiler jobs (default: `2`)
+  - `JAVA_XMX`: heap size per Java decompiler process (default: `2G`)
+  - `FORMAT_MAX_PROCS`: max formatter workers for `astyle` (default: `8`)
+
+  Example with custom concurrency:
+
+  ```
+  docker run \
+    -e MAX_DECOMPILER_JOBS=3 \
+    -e JAVA_XMX=1G \
+    -e FORMAT_MAX_PROCS=6 \
+    -v "$PWD/infiles:/infiles" \
+    -v "$PWD/libfiles:/libfiles" \
+    -v "$PWD/outfiles:/outfiles" \
+    ghcr.io/rims-naps/java-decompiler:latest
+  ```
+
    For Podman users, replace `docker` with `podman` in the command.
 
 3. **Build & Run Locally (Windows 11)**:
@@ -32,14 +52,21 @@ docker run -v "$PWD/infiles:/infiles" -v "$PWD/libfiles:/libfiles" -v "$PWD/outf
    **Docker:**
    ```cmd
    docker build -t local/java-decompiler .
-   docker run -ti --rm -v "%cd%/infiles:/infiles" -v "%cd%/libfiles:/libfiles" -v "%cd%/outfiles:/outfiles" local/java-decompiler
+  docker run -ti --rm -e MAX_DECOMPILER_JOBS=3 -e JAVA_XMX=1G -v "%cd%/infiles:/infiles" -v "%cd%/libfiles:/libfiles" -v "%cd%/outfiles:/outfiles" local/java-decompiler
    ```
 
    **Podman:**
    ```cmd
    podman build -t local/java-decompiler .
-   podman run -ti --rm -v "%cd%/infiles:/infiles" -v "%cd%/libfiles:/libfiles" -v "%cd%/outfiles:/outfiles" local/java-decompiler
+  podman run -ti --rm -e MAX_DECOMPILER_JOBS=3 -e JAVA_XMX=1G -v "%cd%/infiles:/infiles" -v "%cd%/libfiles:/libfiles" -v "%cd%/outfiles:/outfiles" local/java-decompiler
    ```
+
+## ⚙️ Concurrency Notes
+
+- Total memory usage grows with `MAX_DECOMPILER_JOBS * JAVA_XMX`.
+- If the container is memory constrained, reduce either `MAX_DECOMPILER_JOBS` or `JAVA_XMX`.
+- Job failures are tracked per decompiler run. The container exits with a non-zero code if any decompiler job fails.
+- Per-job logs are written under `./outfiles` as `log-<decompiler>-<jar>.txt`.
 
 ## 💡&nbsp;Background
 

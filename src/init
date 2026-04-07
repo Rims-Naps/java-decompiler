@@ -4,6 +4,15 @@ set -eo pipefail
 
 count=0
 error_log="$OUTFILES/decompilation-errors.txt"
+MAX_DECOMPILER_JOBS="${MAX_DECOMPILER_JOBS:-3}"
+FORMAT_MAX_PROCS="${FORMAT_MAX_PROCS:-8}"
+STATUS_DIR=""
+
+cleanup() {
+    if [ -n "$STATUS_DIR" ] && [ -d "$STATUS_DIR" ]; then
+        rm -rf "$STATUS_DIR"
+    fi
+}
 
 # Function to log errors
 log_error() {
@@ -17,90 +26,154 @@ log_info() {
     echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') - $message" | tee -a "$error_log"
 }
 
-function decompile_jars {
-    local infiles
-    local libfiles
-    local classpath
-    local decompiler
+build_classpath() {
+    local libfiles="$1"
+    local classpath=""
+
+    while IFS= read -r -d '' lib; do
+        if [ -n "$classpath" ]; then
+            classpath+="${classpath:+:}$lib"
+        else
+            classpath="$lib"
+        fi
+    done < <(find "$libfiles" -maxdepth 1 -type f -name '*.jar' -print0 2>/dev/null)
+
+    echo "$classpath"
+}
+
+run_decompiler_job() {
+    local decompiler="$1"
+    local jarfile="$2"
+    local outdir_base
     local outdir
+    local jar_name
+    local safe_jar
+    local job_log
+    local failed=0
 
-    # Use default input and library directories if none are specified
-    infiles="${1:-$INFILES}"
-    libfiles="${2:-$LIBFILES}"
+    jar_name="$(basename "$jarfile")"
+    outdir_base="$OUTFILES/${jar_name}-${decompiler}"
+    outdir="$outdir_base/src"
+    safe_jar="${jar_name//[^a-zA-Z0-9._-]/_}"
+    job_log="$OUTFILES/log-${decompiler}-${safe_jar}.txt"
 
-    # Create classpath from libfiles directory
-    if [ "$(ls -A $libfiles/*.jar 2>/dev/null)" ]; then
-        classpath=$(find "$libfiles" -name "*.jar" | tr '\n' ':')
-    else
-        classpath=""
+    if [[ -e "$outdir_base" ]]; then
+        log_info "Directory '$outdir_base' already exists. Skipping..."
+        return 0
     fi
 
-    if [ "$(ls -A $infiles/*.jar 2>/dev/null)" ]; then
-        for jarfile in $infiles/*.jar; do
-            jarcount=0
+    log_info "Decompiling $jar_name with $decompiler"
+    mkdir -p "$outdir"
 
-            for decompiler in 'cfr' 'vineflower' 'procyon'; do
-                outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-                if [[ -e "$outdir" ]]; then
-                    log_info "Directory '$outdir' already exists. Skipping..."
-                else
-                    ((jarcount+=1))
-                    log_info "Decompiling $(basename $jarfile) with $decompiler"
-                    case $decompiler in
-                        'cfr')
-                            mkdir -p "$outdir"
-                            # CFR decompilation, pass classpath if available
-                            if [ -n "$classpath" ]; then
-                                java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" --extraclasspath "$classpath" 2>> "$error_log" || log_error "Failed to decompile $jarfile with CFR"
-                            else
-                                java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with CFR"
-                            fi
-                            ;;
-                        'vineflower')
-                            mkdir -p "$outdir"
-                            local vf_lib_args=""
-                            if [ -n "$classpath" ]; then
-                                IFS=':' read -ra LIBS <<< "$classpath"
-                                for lib in "${LIBS[@]}"; do
-                                    if [ -n "$lib" ] && [ -f "$lib" ]; then
-                                        vf_lib_args="$vf_lib_args -e=$lib"
-                                    fi
-                                done
-                            fi
-                            java "-Xmx$JAVA_XMX" -jar /opt/vineflower.jar --folder $vf_lib_args "$jarfile" "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Vineflower"
-                            ;;
-                        'procyon')
-                            mkdir -p "$outdir"
-                            # Procyon decompilation, classpath might be needed for full decompilation
-                            if [ -n "$classpath" ]; then
-                                procyon -jar "$jarfile" -cp "$classpath" -o "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Procyon"
-                            else
-                                procyon -jar "$jarfile" -o "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Procyon"
-                            fi
-                            ;;
-                    esac
-                fi
-            done
-
-            if [[ "$jarcount" -gt 0 ]]; then
-                ((count+=1))
+    case "$decompiler" in
+        'cfr')
+            if [ -n "$CLASSPATH_LIBS" ]; then
+                java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" --extraclasspath "$CLASSPATH_LIBS" >> "$job_log" 2>&1 || failed=1
+            else
+                java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" >> "$job_log" 2>&1 || failed=1
             fi
-        done
-    else
-        log_info "No JAR files found in $infiles"
+            ;;
+        'vineflower')
+            local vf_args=()
+            if [ -n "$CLASSPATH_LIBS" ]; then
+                IFS=':' read -ra LIBS <<< "$CLASSPATH_LIBS"
+                for lib in "${LIBS[@]}"; do
+                    if [ -n "$lib" ] && [ -f "$lib" ]; then
+                        vf_args+=("-e=$lib")
+                    fi
+                done
+            fi
+            java "-Xmx$JAVA_XMX" -jar /opt/vineflower.jar --folder "${vf_args[@]}" "$jarfile" "$outdir" >> "$job_log" 2>&1 || failed=1
+            ;;
+        'procyon')
+            if [ -n "$CLASSPATH_LIBS" ]; then
+                procyon -jar "$jarfile" -cp "$CLASSPATH_LIBS" -o "$outdir" >> "$job_log" 2>&1 || failed=1
+            else
+                procyon -jar "$jarfile" -o "$outdir" >> "$job_log" 2>&1 || failed=1
+            fi
+            ;;
+    esac
+
+    if [[ "$failed" -eq 1 ]]; then
+        log_error "Failed to decompile $jarfile with $decompiler. See $job_log"
+        : > "$STATUS_DIR/fail-${decompiler}-${safe_jar}"
     fi
+
+    return 0
+}
+
+decompile_jars() {
+    local infiles="${1:-$INFILES}"
+    local libfiles="${2:-$LIBFILES}"
+    local jars=()
+    local classpath=""
+
+    while IFS= read -r -d '' jar; do
+        jars+=("$jar")
+    done < <(find "$infiles" -maxdepth 1 -type f -name '*.jar' -print0 2>/dev/null)
+
+    if [[ "${#jars[@]}" -eq 0 ]]; then
+        log_info "No JAR files found in $infiles"
+        return
+    fi
+
+    classpath="$(build_classpath "$libfiles")"
+    CLASSPATH_LIBS="$classpath"
+    export CLASSPATH_LIBS JAVA_XMX OUTFILES error_log STATUS_DIR
+    export -f run_decompiler_job log_info log_error
+
+    for jarfile in "${jars[@]}"; do
+        ((count+=1))
+    done
+
+    {
+        for jarfile in "${jars[@]}"; do
+            printf 'cfr\0%s\0vineflower\0%s\0procyon\0%s\0' "$jarfile" "$jarfile" "$jarfile"
+        done
+    } | xargs -0 -n 2 -P "$MAX_DECOMPILER_JOBS" bash -c 'run_decompiler_job "$1" "$2"' _
 }
 
 log_info "Starting decompilation process"
+
+if ! command -v xargs >/dev/null 2>&1; then
+    log_error "xargs is required but not installed"
+    exit 1
+fi
+
+if ! [[ "$MAX_DECOMPILER_JOBS" =~ ^[0-9]+$ ]] || [[ "$MAX_DECOMPILER_JOBS" -lt 1 ]]; then
+    log_error "MAX_DECOMPILER_JOBS must be a positive integer"
+    exit 1
+fi
+
+if ! [[ "$FORMAT_MAX_PROCS" =~ ^[0-9]+$ ]] || [[ "$FORMAT_MAX_PROCS" -lt 1 ]]; then
+    log_error "FORMAT_MAX_PROCS must be a positive integer"
+    exit 1
+fi
+
+mkdir -p "$OUTFILES"
+STATUS_DIR="$(mktemp -d "$OUTFILES/.decompile-status.XXXXXX")"
+trap cleanup EXIT
+
 decompile_jars "$INFILES" "$LIBFILES"
+
+job_failures=$(find "$STATUS_DIR" -maxdepth 1 -type f -name 'fail-*' | wc -l)
 
 if [[ "$count" -eq 0 ]]; then
     log_error "No files were processed."
     exit 1
 else
     log_info "Processed $count JAR files"
-    log_info "Formatting decompiled Java files"
-    find "$OUTFILES" -type f -iname '*.java' -print0 | xargs -0 --max-procs=8 astyle --suffix=none --style=java --indent=tab 2>> "$error_log" || log_error "Failed to format some Java files"
+    if find "$OUTFILES" -type f -iname '*.java' -print -quit | grep -q .; then
+        log_info "Formatting decompiled Java files"
+        find "$OUTFILES" -type f -iname '*.java' -print0 | xargs -0 --max-procs="$FORMAT_MAX_PROCS" astyle --suffix=none --style=java --indent=tab 2>> "$error_log" || log_error "Failed to format some Java files"
+    else
+        log_info "No Java files found for formatting"
+    fi
+fi
+
+if [[ "$job_failures" -gt 0 ]]; then
+    log_error "Decompilation completed with $job_failures failed job(s)."
+    exit 1
 fi
 
 log_info "Decompilation process completed. Check $error_log for any errors."
