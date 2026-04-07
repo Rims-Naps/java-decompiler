@@ -19,10 +19,21 @@ log_info() {
 
 function decompile_jars {
     local infiles
+    local libfiles
+    local classpath
     local decompiler
     local outdir
 
-    infiles="$1"
+    # Use default input and library directories if none are specified
+    infiles="${1:-$INFILES}"
+    libfiles="${2:-$LIBFILES}"
+
+    # Create classpath from libfiles directory
+    if [ "$(ls -A $libfiles/*.jar 2>/dev/null)" ]; then
+        classpath=$(find "$libfiles" -name "*.jar" | tr '\n' ':')
+    else
+        classpath=""
+    fi
 
     if [ "$(ls -A $infiles/*.jar 2>/dev/null)" ]; then
         for jarfile in $infiles/*.jar; do
@@ -34,17 +45,38 @@ function decompile_jars {
                     log_info "Directory '$outdir' already exists. Skipping..."
                 else
                     ((jarcount+=1))
-                    mkdir -p "$outdir"
                     log_info "Decompiling $(basename $jarfile) with $decompiler"
                     case $decompiler in
                         'cfr')
-                            java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with CFR"
+                            mkdir -p "$outdir"
+                            # CFR decompilation, pass classpath if available
+                            if [ -n "$classpath" ]; then
+                                java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" --extraclasspath "$classpath" 2>> "$error_log" || log_error "Failed to decompile $jarfile with CFR"
+                            else
+                                java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with CFR"
+                            fi
                             ;;
                         'vineflower')
-                            java "-Xmx$JAVA_XMX" -jar /opt/vineflower.jar "$jarfile" "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Vineflower"
+                            mkdir -p "$outdir"
+                            local vf_lib_args=""
+                            if [ -n "$classpath" ]; then
+                                IFS=':' read -ra LIBS <<< "$classpath"
+                                for lib in "${LIBS[@]}"; do
+                                    if [ -n "$lib" ] && [ -f "$lib" ]; then
+                                        vf_lib_args="$vf_lib_args -e=$lib"
+                                    fi
+                                done
+                            fi
+                            java "-Xmx$JAVA_XMX" -jar /opt/vineflower.jar --folder $vf_lib_args "$jarfile" "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Vineflower"
                             ;;
                         'procyon')
-                            procyon -jar "$jarfile" -o "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Procyon"
+                            mkdir -p "$outdir"
+                            # Procyon decompilation, classpath might be needed for full decompilation
+                            if [ -n "$classpath" ]; then
+                                procyon -jar "$jarfile" -cp "$classpath" -o "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Procyon"
+                            else
+                                procyon -jar "$jarfile" -o "$outdir" 2>> "$error_log" || log_error "Failed to decompile $jarfile with Procyon"
+                            fi
                             ;;
                     esac
                 fi
@@ -60,7 +92,7 @@ function decompile_jars {
 }
 
 log_info "Starting decompilation process"
-decompile_jars "$INFILES"
+decompile_jars "$INFILES" "$LIBFILES"
 
 if [[ "$count" -eq 0 ]]; then
     log_error "No files were processed."

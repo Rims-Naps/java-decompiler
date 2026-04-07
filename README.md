@@ -20,45 +20,28 @@
 
 2. **Run the Docker Image**:
 
-   **For Linux and macOS:**
-
-   ```bash
-   docker run \
-       -ti \
-       --rm \
-       -v "$PWD/infiles:/infiles:Z,ro" \
-       -v "$PWD/libfiles:/libfiles:Z,ro" \
-       -v "$PWD/outfiles:/outfiles:Z,rw" \
-       ghcr.io/rims-naps/java-decompiler:latest
-   ```
-
-   **For Windows CMD:**
-
-   ```cmd
-   docker run ^
-       -ti ^
-       --rm ^
-       -v "%cd%\infiles:/infiles:Z,ro" ^
-       -v "%cd%\libfiles:/libfiles:Z,ro" ^
-       -v "%cd%\outfiles:/outfiles:Z,rw" ^
-       ghcr.io/rims-naps/java-decompiler:latest
-   ```
-
-   **For Windows PowerShell:**
-
-   ```powershell
-   docker run `
-       -ti `
-       --rm `
-       -v "${PWD}\infiles:/infiles:Z,ro" `
-       -v "${PWD}\libfiles:/libfiles:Z,ro" `
-       -v "${PWD}\outfiles:/outfiles:Z,rw" `
-       ghcr.io/rims-naps/java-decompiler:latest
-   ```
-
+```
+docker run -v "$PWD/infiles:/infiles" -v "$PWD/libfiles:/libfiles" -v "$PWD/outfiles:/outfiles" ghcr.io/rims-naps/java-decompiler:latest
+```
    For Podman users, replace `docker` with `podman` in the command.
 
-## 💡 Background
+3. **Build & Run Locally (Windows 11)**:
+
+   If you want to rebuild the container from source and run it locally:
+
+   **Docker:**
+   ```cmd
+   docker build -t local/java-decompiler .
+   docker run -ti --rm -v "%cd%/infiles:/infiles" -v "%cd%/libfiles:/libfiles" -v "%cd%/outfiles:/outfiles" local/java-decompiler
+   ```
+
+   **Podman:**
+   ```cmd
+   podman build -t local/java-decompiler .
+   podman run -ti --rm -v "%cd%/infiles:/infiles" -v "%cd%/libfiles:/libfiles" -v "%cd%/outfiles:/outfiles" local/java-decompiler
+   ```
+
+## 💡&nbsp;Background
 
 This Docker image is equipped with the following Java decompilers:
 - [CFR](https://www.benf.org/other/cfr/)
