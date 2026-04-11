@@ -65,6 +65,7 @@ run_decompiler_job() {
     log_info "Decompiling $jar_name with $decompiler"
     mkdir -p "$outdir"
 
+
     case "$decompiler" in
         'cfr')
             if [ -n "$CLASSPATH_LIBS" ]; then
@@ -93,6 +94,27 @@ run_decompiler_job() {
             fi
             ;;
     esac
+
+    # Generate output.txt: list all Java files created for this JAR
+    output_txt="$outdir/output.txt"
+    find "$outdir" -type f -name '*.java' | sed "s|^$outdir/||" | sort > "$output_txt"
+
+    # For non-CFR decompilers, generate summary.txt in CFR style
+    if [[ "$decompiler" != "cfr" ]]; then
+        summary_txt="$outdir/summary.txt"
+        {
+            echo "Summary for $jarfile"
+            echo "Decompiled with ${decompiler^}"
+            echo
+            # List top-level packages and classes
+            find "$outdir" -type f -name '*.java' | while read -r f; do
+                relpath="${f#$outdir/}"
+                classpath="${relpath%.java}"
+                classpath="${classpath//\//.}"
+                echo "$classpath"
+            done | sort | uniq
+        } > "$summary_txt"
+    fi
 
     if [[ "$failed" -eq 1 ]]; then
         log_error "Failed to decompile $jarfile with $decompiler. See $job_log"

@@ -1,6 +1,10 @@
 infiles/
 libfiles/
-outfiles/
+
 .vscode/
-
-
+*.txt
+*.jar
+*.java
+*.class
+.github/
+Project_Architecture_Blueprint.md
